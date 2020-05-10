@@ -3,21 +3,20 @@ const app = express();
 const http = require('http').Server(app);
 const io = require('socket.io')(http);
 const bodyParser = require('body-parser');
+const passport = require('passport');
 const mongoose = require('mongoose');
 
-const uri = require('./models/secret_data.js');
-
-const passport = require('passport');
 require('./models/db');
 require('./config/passport');
+
 const User = mongoose.model('User');
 
 app.use('/', express.static(__dirname + '/public'));
-app.get('*', (req, res) => {
-    res.redirect('/');
-});
 app.get('/', function (req, res) {
     res.sendFile('index.html');
+});
+app.get('*', (req, res) => {
+    res.redirect('/');
 });
 
 app.use(function (req, res, next) {
@@ -84,6 +83,6 @@ app.post('/api/login', function (req, res) {
     })(req, res);
 });
 
-const server = http.listen(8080, function () {
-    console.log('listening on *:8080');
+http.listen(8080, function () {
+    console.log('Listening on *:8080');
 });
