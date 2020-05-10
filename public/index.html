@@ -67,11 +67,11 @@
     </form>
     <script>
         var socket = io.connect('http://localhost:8080');
+        var user = {};
 
         $('form').submit(function (e) {
             e.preventDefault();
-            socket.emit('chat_message', $('#txt').val());
-            $('#txt').val('');
+            sendMessage();
             return false;
         });
 
@@ -86,18 +86,57 @@
         var username = prompt('Enter username:');
         var password = prompt('Enter password:');
 
-        var http = new XMLHttpRequest();
-        var url = '/api/login';
-        http.open('POST', url, true);
-        http.setRequestHeader('Content-type', 'application/json; charset=utf-8');
-        http.send(JSON.stringify({ username: username, password: password }));
-        http.onreadystatechange = function () {
-            if (http.readyState == 4 && http.status == 200) {
-                alert(http.responseText);
+        init();
+
+        function init() {
+            var http = new XMLHttpRequest();
+            var url = '/api/login';
+            http.open('POST', url, true);
+            http.setRequestHeader('Content-type', 'application/json; charset=utf-8');
+            http.send(JSON.stringify({ username: username, password: password }));
+            http.onreadystatechange = function () {
+                if (http.readyState == 4 && http.status == 200) {
+                    user = JSON.parse(http.responseText).user;
+                    localStorage.setItem("token", JSON.parse(http.responseText).token);
+                    url = '/api/messages.get';
+                    http.open('POST', url, true);
+                    http.setRequestHeader('Content-type', 'application/json; charset=utf-8');
+                    http.setRequestHeader("Authorization", `Bearer ${localStorage.getItem("token")}`);
+                    http.send(JSON.stringify({ "data": "none" }));
+                    http.onreadystatechange = function () {
+                        if (http.readyState == 4 && http.status == 200) {
+                            var data = JSON.parse(http.responseText);
+                            var messages = data.messages;
+
+                            for (var i = 0; i < messages.length; i++) {
+                                $('#messages').append($('<li>').html(`<span>Sender: ${messages[i].senderName} | ${new Date(messages[i].time).toTimeString()}</span><br><span>${messages[i].message}</span>`));
+                            }
+                        }
+                    }
+                }
             }
         }
 
-        socket.emit('username', username);
+        function sendMessage() {
+            var http = new XMLHttpRequest();
+            var url = '/api/message.send';
+            http.open('POST', url, true);
+            http.setRequestHeader('Content-type', 'application/json; charset=utf-8');
+            http.setRequestHeader('Authorization', `Bearer ${localStorage.getItem("token")}`);
+            http.send(JSON.stringify({
+                senderID: user._id,
+                senderName: user.username,
+                receiverID: "5eb85bdebd4b9942aceee9e1",
+                receiverName: "dzmitry-k",
+                message: $('#txt').val()
+            }));
+            http.onreadystatechange = function () {
+                if (http.readyState == 4 && http.status == 200) {
+                    socket.emit('chat_message', $('#txt').val());
+                    $('#txt').val('');
+                }
+            }
+        }
     </script>
 </body>
 

@@ -5,11 +5,19 @@ const io = require('socket.io')(http);
 const bodyParser = require('body-parser');
 const passport = require('passport');
 const mongoose = require('mongoose');
+const jwt = require('express-jwt');
+const uri = require('./models/secret_data.js');
 
 require('./models/db');
 require('./config/passport');
 
 const User = mongoose.model('User');
+const Message = mongoose.model('Message');
+
+const auth = jwt({
+    secret: uri.secret,
+    userProperty: 'payload'
+});
 
 app.use('/', express.static(__dirname + '/public'));
 app.get('/', function (req, res) {
@@ -75,12 +83,101 @@ app.post('/api/login', function (req, res) {
             token = user.generateJwt();
             res.status(200);
             res.json({
-                "token": token
+                token: token,
+                user: user
             });
         } else {
             res.status(401).json(info);
         }
     })(req, res);
+});
+
+app.post('/api/messages.get', auth, function (req, res) {
+    if (!req.payload._id) {
+        res.status(401).json({ message: "Auth Error: User is not authorized." });
+    } else {
+        User.findById(req.payload._id).exec(function (err, user) {
+            if (user != null) {
+                let data = {
+                    messages: [],
+                    users: [],
+                    chats: []
+                }
+                User.find({}).exec(function (err, users) {
+                    data.users = users;
+
+                    Message.find({ $or: [{ 'receiverID': req.payload._id }, { 'senderID': req.payload._id }] }).exec(function (err, messages) {
+                        data.messages = messages.map(item => {
+                            item.message = item.decryptMessage(item.message)
+                            return item;
+                        });
+
+                        data.messages = data.messages.sort((x, y) => {
+                            if (x.time < y.time) {
+                                return -1;
+                            }
+                            if (x.time > y.time) {
+                                return 1;
+                            }
+                            return 0;
+                        });
+
+                        for (var i = 0; i < data.users.length; i++) {
+                            let chat = {
+                                name: data.users[i].username,
+                                messages: data.messages.filter(item => {
+                                    return (item.senderID == data.users[i]._id && item.receiverID == req.payload._id) || (item.receiverID == data.users[i]._id && item.senderID == req.payload._id)
+                                }).sort((x, y) => {
+                                    if (x.time < y.time) {
+                                        return -1;
+                                    }
+                                    if (x.time > y.time) {
+                                        return 1;
+                                    }
+                                    return 0;
+                                })
+                            }
+                            data.chats.push(chat);
+                        }
+
+                        res.status(200).json(data);
+                    });
+
+                })
+
+            } else {
+                res.status(401).json({ message: "Auth Error: User is not found." })
+            }
+        });
+    }
+});
+
+app.post('/api/message.send', auth, function (req, res) {
+    if (!req.payload._id) {
+        res.status(401).json({ message: "Auth Error: User is not authorized." });
+    } else {
+        User.findById(req.payload._id).exec(function (err, user) {
+            if (user != null) {
+                var message = new Message();
+
+                message.senderID = req.payload._id;
+                message.senderName = user.username;
+                message.receiverID = req.body.receiverID;
+                message.receiverName = req.body.receiverName;
+                message.time = new Date().getTime();
+                message.encryptMessage(req.body.message);
+
+                message.save(function (err) {
+                    res.status(200);
+                    res.json({
+                        "message": message
+                    });
+                });
+            } else {
+                res.status(401).json({ message: "Auth Error: User is not found." })
+            }
+        });
+    }
 });
 
 http.listen(8080, function () {
