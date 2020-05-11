@@ -3,9 +3,7 @@ const express = require('express');
 const app = express();
 const http = require('http');
 const https = require('https');
-const io = require('socket.io')(https, {
-    path: '/chat/socket.io'
-});
+const io = require('socket.io')(https);
 const bodyParser = require('body-parser');
 const passport = require('passport');
 const mongoose = require('mongoose');
