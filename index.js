@@ -1,12 +1,26 @@
+const fs = require('fs');
 const express = require('express');
 const app = express();
-const http = require('http').Server(app);
-const io = require('socket.io')(http);
+const http = require('http');
+const https = require('https');
+const io = require('socket.io')(https, {
+    path: '/chat/socket.io'
+});
 const bodyParser = require('body-parser');
 const passport = require('passport');
 const mongoose = require('mongoose');
 const jwt = require('express-jwt');
 const uri = require('./models/secret_data.js');
+
+const privateKey = fs.readFileSync('/etc/letsencrypt/live/chat.chimzuk.com/privkey.pem', 'utf8');
+const certificate = fs.readFileSync('/etc/letsencrypt/live/chat.chimzuk.com/cert.pem', 'utf8');
+const ca = fs.readFileSync('/etc/letsencrypt/live/chat.chimzuk.com/chain.pem', 'utf8');
+
+const credentials = {
+    key: privateKey,
+    cert: certificate,
+    ca: ca
+};
 
 require('./models/db');
 require('./config/passport');
@@ -186,6 +200,19 @@ app.post('/api/message.send', auth, function (req, res) {
     }
 });
 
-http.listen(8080, function () {
-    console.log('Listening on *:8080');
+const redirection = express();
+
+redirection.get('*', function (req, res) {
+    res.redirect('https://' + req.headers.host + req.url);
+});
+
+const httpServer = http.createServer(redirection);
+const httpsServer = https.createServer(credentials, app);
+
+httpServer.listen(8099, () => {
+    console.log('HTTP Server running on port 8099');
+});
+
+httpsServer.listen(8009, () => {
+    console.log('HTTPS Server running on port 8009');
 });
