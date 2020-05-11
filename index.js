@@ -50,7 +50,7 @@ io.sockets.on('connection', function (socket) {
     })
 
     socket.on('chat_message', function (message) {
-        io.emit('chat_message', '<strong>' + socket.username + '</strong>: ' + message);
+        io.emit('chat_message', message);
     });
 
 });
@@ -123,21 +123,27 @@ app.post('/api/messages.get', auth, function (req, res) {
                         });
 
                         for (var i = 0; i < data.users.length; i++) {
-                            let chat = {
-                                name: data.users[i].username,
-                                messages: data.messages.filter(item => {
-                                    return (item.senderID == data.users[i]._id && item.receiverID == req.payload._id) || (item.receiverID == data.users[i]._id && item.senderID == req.payload._id)
-                                }).sort((x, y) => {
-                                    if (x.time < y.time) {
-                                        return -1;
-                                    }
-                                    if (x.time > y.time) {
-                                        return 1;
-                                    }
-                                    return 0;
-                                })
+                            if (users[i]._id != req.payload._id) {
+                                let chat = {
+                                    name: data.users[i].username,
+                                    userData: {
+                                        _id: data.users[i]._id,
+                                        username: data.users[i].username
+                                    },
+                                    messages: data.messages.filter(item => {
+                                        return (item.senderID == data.users[i]._id && item.receiverID == req.payload._id) || (item.receiverID == data.users[i]._id && item.senderID == req.payload._id)
+                                    }).sort((x, y) => {
+                                        if (x.time < y.time) {
+                                            return -1;
+                                        }
+                                        if (x.time > y.time) {
+                                            return 1;
+                                        }
+                                        return 0;
+                                    })
+                                }
+                                data.chats.push(chat);
                             }
-                            data.chats.push(chat);
                         }
 
                         res.status(200).json(data);
@@ -164,7 +170,7 @@ app.post('/api/message.send', auth, function (req, res) {
                 message.senderName = user.username;
                 message.receiverID = req.body.receiverID;
                 message.receiverName = req.body.receiverName;
-                message.time = new Date().getTime();
+                message.time = req.body.time;
                 message.encryptMessage(req.body.message);
 
                 message.save(function (err) {

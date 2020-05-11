@@ -3,6 +3,7 @@
 
 <head>
     <title>Simple Chat for CS 351</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         * {
             margin: 0;
@@ -29,12 +30,12 @@
             border-style: solid;
             border-width: 1px;
             padding: 10px;
-            width: 85%;
+            width: 75%;
             margin-right: .5%;
         }
 
         form button {
-            width: 9%;
+            width: 20%;
             background: rgb(130, 224, 255);
             border: none;
             padding: 10px;
@@ -45,6 +46,7 @@
             list-style-type: none;
             margin: 0;
             padding: 0;
+            margin-bottom: 50px;
         }
 
         #messages li {
@@ -54,20 +56,46 @@
         #messages li:nth-child(odd) {
             background: #eee;
         }
+
+        .chat-title {
+            padding: 10px 20px;
+            background: rgb(130, 224, 255);
+            border: none;
+            cursor: pointer;
+            margin-bottom: 5px;
+        }
+
+        #chats {
+            display: flex;
+            flex-direction: column;
+            margin: 5px;
+            margin-bottom: 0px;
+        }
+
+        #container {
+            display: flex;
+        }
     </style>
     <script src="../../socket.io/socket.io.js"></script>
     <script src="http://code.jquery.com/jquery-1.10.1.min.js"></script>
 </head>
 
 <body>
-    <ul id="messages"></ul>
-    <form action="/" method="POST" id="chatForm">
-        <input id="txt" autocomplete="off" autofocus="on" oninput="isTyping()"
-            placeholder="type your message here..." /><button>Send</button>
-    </form>
+    <div id="container">
+        <div id="chats"></div>
+        <ul id="messages"></ul>
+        <form id="chat">
+            <input id="txt" autocomplete="off" autofocus="on" placeholder="Type your message here..." />
+            <button>Send</button>
+        </form>
+    </div>
+
     <script>
         var socket = io.connect('http://localhost:8080');
+        var chats = [];
+        var messages = [];
         var user = {};
+        var chat = {};
 
         $('form').submit(function (e) {
             e.preventDefault();
@@ -75,16 +103,25 @@
             return false;
         });
 
-        socket.on('chat_message', function (msg) {
-            $('#messages').append($('<li>').html(msg));
+        socket.on('chat_message', function (message) {
+            for (var i = 0; i < chats.length; i++) {
+                if (chats[i].userData._id == message.senderID) {
+                    chats[i].messages.push(message);
+                }
+            }
+
+            if (user._id == message.senderID) {
+                messages.push(message);
+                $('#messages').append($('<li>').html(`<span>Sender: ${message.senderName} | ${new Date(message.time).toTimeString()}</span><br><span><b>${message.message}</b></span>`));
+            }
         });
 
         socket.on('is_online', function (username) {
             $('#messages').append($('<li>').html(username));
         });
 
-        var username = prompt('Enter username:');
-        var password = prompt('Enter password:');
+        var username = prompt('LOGIN | Enter username:');
+        var password = prompt('LOGIN | Enter password:');
 
         init();
 
@@ -106,33 +143,56 @@
                     http.onreadystatechange = function () {
                         if (http.readyState == 4 && http.status == 200) {
                             var data = JSON.parse(http.responseText);
-                            var messages = data.messages;
-
-                            for (var i = 0; i < messages.length; i++) {
-                                $('#messages').append($('<li>').html(`<span>Sender: ${messages[i].senderName} | ${new Date(messages[i].time).toTimeString()}</span><br><span>${messages[i].message}</span>`));
-                            }
+                            chats = data.chats;
+                            chat = chats[0];
+                            messages = chat.messages;
+                            populateChat();
                         }
                     }
                 }
             }
         }
 
+        function populateChat() {
+            for (var i = 0; i < messages.length; i++) {
+                $('#messages').append($('<li>').html(`<span>Sender: ${messages[i].senderName} | ${new Date(messages[i].time).toTimeString()}</span><br><span><b>${messages[i].message}</b></span>`));
+            }
+
+            for (var i = 0; i < chats.length; i++) {
+                $('#chats').append(`<button class="chat-title" onclick="selectChat('${chats[i].userData._id}')">${chats[i].name}</button>`);
+            }
+        }
+
+        function selectChat(_id) {
+            for (var i = 0; i < chats.length; i++) {
+                if (chats[i].userData._id == _id) {
+                    chat = chats[i];
+                    messages = chat.messages;
+                }
+            }
+            $('#messages').html('');
+            $('#chats').html('');
+            populateChat();
+        }
+
         function sendMessage() {
+            var message = {
+                senderID: user._id,
+                senderName: user.username,
+                receiverID: chat.userData._id,
+                receiverName: chat.userData.username,
+                message: $('#txt').val(),
+                time: new Date().getTime()
+            };
             var http = new XMLHttpRequest();
             var url = '/api/message.send';
             http.open('POST', url, true);
             http.setRequestHeader('Content-type', 'application/json; charset=utf-8');
             http.setRequestHeader('Authorization', `Bearer ${localStorage.getItem("token")}`);
-            http.send(JSON.stringify({
-                senderID: user._id,
-                senderName: user.username,
-                receiverID: "5eb85bdebd4b9942aceee9e1",
-                receiverName: "dzmitry-k",
-                message: $('#txt').val()
-            }));
+            http.send(JSON.stringify(message));
             http.onreadystatechange = function () {
                 if (http.readyState == 4 && http.status == 200) {
-                    socket.emit('chat_message', $('#txt').val());
+                    socket.emit('chat_message', message);
                     $('#txt').val('');
                 }
             }
