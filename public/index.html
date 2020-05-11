@@ -104,26 +104,28 @@
         });
 
         socket.on('chat_message', function (message) {
-            for (var i = 0; i < chats.length; i++) {
-                if (chats[i].userData._id == message.senderID) {
-                    chats[i].messages.push(message);
+            if (message.receiverID == user._id || message.senderID == user._id) {
+                for (var i = 0; i < chats.length; i++) {
+                    if (chats[i].userData._id == message.senderID) {
+                        chats[i].messages.push(message);
+                    }
+                }
+
+                if (chat.userData._id == message.senderID || chat.userData._id == message.receiverID) {
+                    messages.push(message);
+                    $('#messages').append($('<li>').html(`<span>Sender: ${message.senderName} | ${new Date(message.time).toTimeString()}</span><br><span><b>${message.message}</b></span>`));
                 }
             }
-
-            if (user._id == message.senderID) {
-                messages.push(message);
-                $('#messages').append($('<li>').html(`<span>Sender: ${message.senderName} | ${new Date(message.time).toTimeString()}</span><br><span><b>${message.message}</b></span>`));
-            }
-        });
-
-        socket.on('is_online', function (username) {
-            $('#messages').append($('<li>').html(username));
         });
 
         var username = prompt('LOGIN | Enter username:');
         var password = prompt('LOGIN | Enter password:');
 
-        init();
+        $("#container").hide();
+
+        if (username != "" && password != "") {
+            init();
+        }
 
         function init() {
             var http = new XMLHttpRequest();
@@ -146,6 +148,7 @@
                             chats = data.chats;
                             chat = chats[0];
                             messages = chat.messages;
+                            $("#container").show();
                             populateChat();
                         }
                     }
@@ -176,24 +179,26 @@
         }
 
         function sendMessage() {
-            var message = {
-                senderID: user._id,
-                senderName: user.username,
-                receiverID: chat.userData._id,
-                receiverName: chat.userData.username,
-                message: $('#txt').val(),
-                time: new Date().getTime()
-            };
-            var http = new XMLHttpRequest();
-            var url = '/api/message.send';
-            http.open('POST', url, true);
-            http.setRequestHeader('Content-type', 'application/json; charset=utf-8');
-            http.setRequestHeader('Authorization', `Bearer ${localStorage.getItem("token")}`);
-            http.send(JSON.stringify(message));
-            http.onreadystatechange = function () {
-                if (http.readyState == 4 && http.status == 200) {
-                    socket.emit('chat_message', message);
-                    $('#txt').val('');
+            if ($('#txt').val() != "") {
+                var message = {
+                    senderID: user._id,
+                    senderName: user.username,
+                    receiverID: chat.userData._id,
+                    receiverName: chat.userData.username,
+                    message: $('#txt').val(),
+                    time: new Date().getTime()
+                };
+                var http = new XMLHttpRequest();
+                var url = '/api/message.send';
+                http.open('POST', url, true);
+                http.setRequestHeader('Content-type', 'application/json; charset=utf-8');
+                http.setRequestHeader('Authorization', `Bearer ${localStorage.getItem("token")}`);
+                http.send(JSON.stringify(message));
+                http.onreadystatechange = function () {
+                    if (http.readyState == 4 && http.status == 200) {
+                        socket.emit('chat_message', message);
+                        $('#txt').val('');
+                    }
                 }
             }
         }
